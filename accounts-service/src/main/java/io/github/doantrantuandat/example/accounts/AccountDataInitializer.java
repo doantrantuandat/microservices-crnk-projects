@@ -20,8 +20,14 @@ public class AccountDataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        entityManager.persist(Account.builder().id(1L).name("Alice Nguyen").email("alice@example.com").plan("pro").build());
-        entityManager.persist(Account.builder().id(2L).name("Bob Tran").email("bob@example.com").plan("free").build());
-        entityManager.persist(Account.builder().id(3L).name("Carol Pham").email("carol@example.com").plan("free").build());
+        if (entityManager.find(Account.class, 1L) == null) {
+            entityManager.persist(Account.builder().id(1L).name("Alice Nguyen").email("alice@example.com").plan("pro").build());
+        }
+        if (entityManager.find(Account.class, 2L) == null) {
+            entityManager.persist(Account.builder().id(2L).name("Bob Tran").email("bob@example.com").plan("free").build());
+        }
+        if (entityManager.find(Account.class, 3L) == null) {
+            entityManager.persist(Account.builder().id(3L).name("Carol Pham").email("carol@example.com").plan("free").build());
+        }
     }
 }
