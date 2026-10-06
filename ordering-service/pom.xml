@@ -1,0 +1,84 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.1</version>
+    <relativePath/>
+  </parent>
+  <groupId>io.github.doantrantuandat.example</groupId>
+  <artifactId>ordering-service</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Listed before crnk-bom deliberately: within one pom's dependencyManagement, the first entry for
+           a given groupId:artifactId wins. crnk-bom's parent (crnk-framework-lts) pins junit-jupiter to
+           5.14.4 for the library's own build; spring-boot-starter-parent:4.1.1 manages JUnit via
+           junit-bom:6.0.3 instead (a new JUnit 6 baseline) and spring-test:7.0.9 is compiled against JUnit
+           6's ExtensionContext.Store API (an added 3-arg computeIfAbsent overload) - without this override
+           winning, tests fail at runtime with NoSuchMethodError, not a compile error (confirmed empirically:
+           see task report). -->
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>6.0.3</version>
+        <type>pom</type><scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.github.doantrantuandat</groupId>
+        <artifactId>crnk-bom</artifactId>
+        <version>4.0.0-lts.2</version>
+        <type>pom</type><scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-setup-spring-boot4</artifactId></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-data-jpa-jackson3</artifactId></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-validation-jackson3</artifactId></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-client-jackson3</artifactId></dependency>
+    <dependency><groupId>org.hibernate.validator</groupId><artifactId>hibernate-validator</artifactId></dependency>
+    <dependency><groupId>org.glassfish</groupId><artifactId>jakarta.el</artifactId><version>4.0.2</version></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
+    <dependency><groupId>org.hibernate.orm</groupId><artifactId>hibernate-core</artifactId></dependency>
+    <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+  </dependencies>
+
+  <build>
+    <finalName>ordering-service</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId>
+        <executions><execution><goals><goal>repackage</goal></goals></execution></executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-toolchains-plugin</artifactId>
+        <version>3.3.0</version>
+        <executions><execution><goals><goal>toolchain</goal></goals></execution></executions>
+        <configuration><toolchains><jdk><version>25</version></jdk></toolchains></configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
