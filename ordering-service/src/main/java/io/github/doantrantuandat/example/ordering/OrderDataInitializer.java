@@ -22,7 +22,11 @@ public class OrderDataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        entityManager.persist(Order.builder().id(1L).orderNumber("ORD-1001").accountId(1L).build());
-        entityManager.persist(OrderLine.builder().id(1L).orderId(1L).productId(1L).qty(2).build());
+        if (entityManager.find(Order.class, 1L) == null) {
+            entityManager.persist(Order.builder().id(1L).orderNumber("ORD-1001").accountId(1L).build());
+        }
+        if (entityManager.find(OrderLine.class, 1L) == null) {
+            entityManager.persist(OrderLine.builder().id(1L).orderId(1L).productId(1L).qty(2).build());
+        }
     }
 }
