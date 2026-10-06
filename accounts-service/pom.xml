@@ -1,0 +1,68 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>2.3.12.RELEASE</version>
+    <relativePath/>
+  </parent>
+  <groupId>io.github.doantrantuandat.example</groupId>
+  <artifactId>accounts-service</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <maven.compiler.release>8</maven.compiler.release>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.github.doantrantuandat</groupId>
+        <artifactId>crnk-bom</artifactId>
+        <version>4.0.0-lts.2</version>
+        <type>pom</type><scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Spring Boot 2.3.12.RELEASE's own managed Lombok (1.18.20) crashes as a javac annotation
+         processor under the JDK 21 toolchain (NoSuchFieldError on javac's internal JCImport AST node -
+         Lombok's reflection shims for that node predate JDK 21, which didn't exist until 3 years after
+         1.18.20 shipped). Pinned to the same JDK21-verified version crnk-framework's own root pom uses. -->
+    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-setup-spring-boot2</artifactId></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-data-jpa-legacy</artifactId></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-validation-legacy</artifactId></dependency>
+    <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-client</artifactId></dependency>
+    <dependency><groupId>com.squareup.okhttp3</groupId><artifactId>okhttp</artifactId><version>4.12.0</version></dependency>
+    <dependency><groupId>org.hibernate.validator</groupId><artifactId>hibernate-validator</artifactId><version>6.2.5.Final</version></dependency>
+    <dependency><groupId>org.glassfish</groupId><artifactId>javax.el</artifactId><version>3.0.1-b12</version></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
+    <dependency><groupId>org.hibernate</groupId><artifactId>hibernate-core</artifactId></dependency>
+    <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId><scope>test</scope></dependency>
+  </dependencies>
+
+  <build>
+    <finalName>accounts-service</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId>
+        <executions><execution><goals><goal>repackage</goal></goals></execution></executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-toolchains-plugin</artifactId>
+        <version>3.3.0</version>
+        <executions><execution><goals><goal>toolchain</goal></goals></execution></executions>
+        <configuration><toolchains><jdk><version>21</version></jdk></toolchains></configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
