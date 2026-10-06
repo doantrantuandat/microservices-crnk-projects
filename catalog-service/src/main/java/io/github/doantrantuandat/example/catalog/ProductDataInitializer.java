@@ -20,11 +20,17 @@ public class ProductDataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        entityManager.persist(Product.builder().id(1L).sku("SKU-001").name("Wireless Mouse")
-                .price(new BigDecimal("19.99")).accountId(1L).build());
-        entityManager.persist(Product.builder().id(2L).sku("SKU-002").name("Mechanical Keyboard")
-                .price(new BigDecimal("89.50")).accountId(1L).build());
-        entityManager.persist(Product.builder().id(3L).sku("SKU-003").name("USB-C Hub")
-                .price(new BigDecimal("34.00")).accountId(1L).build());
+        if (entityManager.find(Product.class, 1L) == null) {
+            entityManager.persist(Product.builder().id(1L).sku("SKU-001").name("Wireless Mouse")
+                    .price(new BigDecimal("19.99")).accountId(1L).build());
+        }
+        if (entityManager.find(Product.class, 2L) == null) {
+            entityManager.persist(Product.builder().id(2L).sku("SKU-002").name("Mechanical Keyboard")
+                    .price(new BigDecimal("89.50")).accountId(1L).build());
+        }
+        if (entityManager.find(Product.class, 3L) == null) {
+            entityManager.persist(Product.builder().id(3L).sku("SKU-003").name("USB-C Hub")
+                    .price(new BigDecimal("34.00")).accountId(1L).build());
+        }
     }
 }
