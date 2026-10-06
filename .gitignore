@@ -1,0 +1,8 @@
+target/
+*.class
+.idea/
+*.iml
+.attach_pid*
+hs_err_pid*
+.mvn/timing.properties
+.DS_Store
