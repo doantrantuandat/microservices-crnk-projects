@@ -165,6 +165,9 @@ public class StorefrontController {
             }
         }
 
+        // Lines and the order itself are 2+ independent HTTP calls, not one transaction - if anything from
+        // here on fails (a later line, or the final order-create), best-effort delete whatever OrderLines
+        // already got created in this request rather than leaving them as orphans (see deleteBestEffort).
         List<OrderLine> createdLines = new ArrayList<>();
         List<LineView> lineViews = new ArrayList<>();
         try {
@@ -176,24 +179,37 @@ public class StorefrontController {
                 createdLines.add(orderingClient.getRepositoryForType(OrderLine.class).create(line));
                 lineViews.add(new LineView(lineReq.qty(), toProductView(products.get(i))));
             }
+
+            Order newOrder = new Order();
+            newOrder.setOrderNumber("ORD-" + UUID.randomUUID());
+            newOrder.setAccountId(request.accountId());
+            newOrder.setLines(createdLines);
+            Order createdOrder = orderingClient.getRepositoryForType(Order.class).create(newOrder);
+
+            OrderSummary summary = new OrderSummary(
+                    createdOrder.getId(), createdOrder.getOrderNumber(), toAccountView(account), lineViews);
+            return ResponseEntity.status(201).body(summary);
         } catch (RuntimeException e) {
+            deleteBestEffort(createdLines);
             return ResponseEntity.status(502).body(error("ordering-service unavailable"));
         }
+    }
 
-        Order newOrder = new Order();
-        newOrder.setOrderNumber("ORD-" + UUID.randomUUID());
-        newOrder.setAccountId(request.accountId());
-        newOrder.setLines(createdLines);
-        Order createdOrder;
-        try {
-            createdOrder = orderingClient.getRepositoryForType(Order.class).create(newOrder);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(502).body(error("ordering-service unavailable"));
+    /**
+     * Compensating cleanup for createOrder's line-then-order creation sequence: not an atomic
+     * transaction, so a failure partway through (a later line, or the final order-create) can leave
+     * earlier OrderLines already persisted in ordering-service with nothing pointing at them. Best-effort
+     * only - a failure deleting one of them is swallowed rather than thrown, since the caller is already
+     * reporting the original failure and a cleanup failure shouldn't mask or replace it.
+     */
+    private void deleteBestEffort(List<OrderLine> createdLines) {
+        for (OrderLine line : createdLines) {
+            try {
+                orderingClient.getRepositoryForType(OrderLine.class).delete(line.getId());
+            } catch (RuntimeException ignored) {
+                // best effort only - nothing more to do here
+            }
         }
-
-        OrderSummary summary = new OrderSummary(
-                createdOrder.getId(), createdOrder.getOrderNumber(), toAccountView(account), lineViews);
-        return ResponseEntity.status(201).body(summary);
     }
 
     /**
