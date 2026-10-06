@@ -208,7 +208,7 @@ Start-Sleep -Seconds 3
 $r = Invoke-Api -Url "$Gateway/api/orders/1/summary"
 Assert-Status "summary still 200 with catalog down (product detail degrades, account is unaffected)" 200 $r | Out-Null
 $r2 = Invoke-Api -Url "$Gateway/api/health"
-Assert-Contains "health reports catalog down" '"catalog":"DOWN"' $r2
+Assert-Contains "health reports catalog down" '"catalog":"UNREACHABLE"' $r2
 if ($r2.Body -notmatch '"catalog":"UP"') {
     $healthAlt = Invoke-Api -Url "$Gateway/api/health"
     if ($healthAlt.Body -match '"catalog":"(DOWN|UNREACHABLE)"') {

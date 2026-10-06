@@ -29,6 +29,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Plain Spring MVC controller - no crnk server dependency anywhere in this class or this project.
@@ -54,6 +59,10 @@ public class StorefrontController {
     // (d) must never hang on a stopped backend: a short, explicit connect/read timeout is the whole
     // point of this endpoint (graceful-degradation verification relies on it returning promptly).
     private final RestClient healthClient;
+
+    // Backs withDeadline()'s wall-clock bound on (c) and (d) - virtual threads are cheap enough to spin
+    // up per call, no pooling/sizing concerns to manage.
+    private final ExecutorService boundedCallExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public StorefrontController(@Qualifier("accountsClient") CrnkClient accountsClient,
                                  @Qualifier("catalogClient") CrnkClient catalogClient,
@@ -130,10 +139,14 @@ public class StorefrontController {
     /**
      * (b) Requires HTTP Basic auth - enforced by SecurityConfig, nothing to check here. Validates the
      * account and every line's product against their real backends before creating anything (so a bad id
-     * in line 3 doesn't leave orphan order lines behind from lines 1-2), then creates each order line
-     * (qty + productId only - this gateway's OrderLine shadow has no order field to set here), then
-     * creates the order with those just-created lines attached via its "lines" relationship - standard
-     * JSON:API resource linkage by id, not a cascading nested create.
+     * in line 3 doesn't leave orphan order lines behind from lines 1-2), then creates the order, then each
+     * order line with its orderId set to the just-created order's real id - the only mechanism confirmed
+     * live to actually persist the link for this entity's particular JPA mapping (see OrderLine.java's
+     * javadoc, and task-4-report.md's fix-round-2 section for the live curl output proving it; pushing
+     * relationship data through Order's own "lines" field at create time does NOT persist it).
+     * <p>
+     * Every entity in this workspace has a plain @Id with no @GeneratedValue - this gateway has no way to
+     * see ordering-service's own id sequence, so it mints ids itself (see {@link #nextId()}).
      */
     @PostMapping("/orders")
     public ResponseEntity<?> createOrder(@RequestBody CreateOrderRequest request) {
@@ -165,47 +178,71 @@ public class StorefrontController {
             }
         }
 
-        // Lines and the order itself are 2+ independent HTTP calls, not one transaction - if anything from
-        // here on fails (a later line, or the final order-create), best-effort delete whatever OrderLines
-        // already got created in this request rather than leaving them as orphans (see deleteBestEffort).
+        // The order and its lines are 2+ independent HTTP calls, not one transaction - if anything from
+        // here on fails (a later line, or the order-create itself), best-effort delete whatever already
+        // got created in this request rather than leaving it behind (see deleteBestEffort).
         List<OrderLine> createdLines = new ArrayList<>();
         List<LineView> lineViews = new ArrayList<>();
+        Order createdOrder = null;
         try {
+            Order newOrder = new Order();
+            newOrder.setId(nextId());
+            newOrder.setOrderNumber("ORD-" + UUID.randomUUID());
+            newOrder.setAccountId(request.accountId());
+            createdOrder = orderingClient.getRepositoryForType(Order.class).create(newOrder);
+
             for (int i = 0; i < requestedLines.size(); i++) {
                 CreateLineRequest lineReq = requestedLines.get(i);
                 OrderLine line = new OrderLine();
+                line.setId(nextId());
                 line.setQty(lineReq.qty());
                 line.setProductId(lineReq.productId());
+                line.setOrderId(createdOrder.getId());
                 createdLines.add(orderingClient.getRepositoryForType(OrderLine.class).create(line));
                 lineViews.add(new LineView(lineReq.qty(), toProductView(products.get(i))));
             }
-
-            Order newOrder = new Order();
-            newOrder.setOrderNumber("ORD-" + UUID.randomUUID());
-            newOrder.setAccountId(request.accountId());
-            newOrder.setLines(createdLines);
-            Order createdOrder = orderingClient.getRepositoryForType(Order.class).create(newOrder);
 
             OrderSummary summary = new OrderSummary(
                     createdOrder.getId(), createdOrder.getOrderNumber(), toAccountView(account), lineViews);
             return ResponseEntity.status(201).body(summary);
         } catch (RuntimeException e) {
-            deleteBestEffort(createdLines);
+            deleteBestEffort(createdOrder, createdLines);
             return ResponseEntity.status(502).body(error("ordering-service unavailable"));
         }
     }
 
     /**
-     * Compensating cleanup for createOrder's line-then-order creation sequence: not an atomic
-     * transaction, so a failure partway through (a later line, or the final order-create) can leave
-     * earlier OrderLines already persisted in ordering-service with nothing pointing at them. Best-effort
-     * only - a failure deleting one of them is swallowed rather than thrown, since the caller is already
-     * reporting the original failure and a cleanup failure shouldn't mask or replace it.
+     * Mints an id for a new Order/OrderLine: every entity in this workspace has a plain @Id with no
+     * @GeneratedValue, and this gateway has no visibility into ordering-service's own id sequence (or
+     * whether it even has one, as opposed to a natural key) - the same "client has to mint an id for a
+     * resource it's about to create" problem the library's own reference examples solve the same way.
+     * Collision risk under real concurrent load is a known, accepted limitation at this demo's scale, not
+     * something this gateway tries to solve properly (that would need a shared id allocator, or switching
+     * ordering-service itself to database-generated ids).
      */
-    private void deleteBestEffort(List<OrderLine> createdLines) {
+    private static Long nextId() {
+        return System.currentTimeMillis();
+    }
+
+    /**
+     * Compensating cleanup for createOrder's order-then-lines creation sequence: not an atomic
+     * transaction, so a failure partway through (a later line, or the order-create itself failing before
+     * any lines exist) can leave an order with missing/partial lines, or lines with nothing pointing at
+     * any order. Best-effort only - a failure deleting something here is swallowed rather than thrown,
+     * since the caller is already reporting the original failure and a cleanup failure shouldn't mask or
+     * replace it.
+     */
+    private void deleteBestEffort(Order createdOrder, List<OrderLine> createdLines) {
         for (OrderLine line : createdLines) {
             try {
                 orderingClient.getRepositoryForType(OrderLine.class).delete(line.getId());
+            } catch (RuntimeException ignored) {
+                // best effort only - nothing more to do here
+            }
+        }
+        if (createdOrder != null) {
+            try {
+                orderingClient.getRepositoryForType(Order.class).delete(createdOrder.getId());
             } catch (RuntimeException ignored) {
                 // best effort only - nothing more to do here
             }
@@ -230,34 +267,61 @@ public class StorefrontController {
      */
     @GetMapping("/raw/accounts/{id}")
     public ResponseEntity<?> rawAccount(@PathVariable Long id) {
-        try {
-            String body = rawClient.get()
-                    .uri(accountsServiceUrl + "/account/{id}", id)
-                    .header("Accept", "application/vnd.api+json")
-                    .retrieve()
-                    .body(String.class);
-            JsonNode node = objectMapper.readTree(body);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("name", node.at("/data/attributes/name").asText());
-            result.put("email", node.at("/data/attributes/email").asText());
-            result.put("plan", node.at("/data/attributes/plan").asText());
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            return ResponseEntity.status(502).body(error("accounts-service unavailable"));
-        }
+        ResponseEntity<?> unavailable = ResponseEntity.status(502).body(error("accounts-service unavailable"));
+        return withDeadline(() -> {
+            try {
+                String body = rawClient.get()
+                        .uri(accountsServiceUrl + "/account/{id}", id)
+                        .header("Accept", "application/vnd.api+json")
+                        .retrieve()
+                        .body(String.class);
+                JsonNode node = objectMapper.readTree(body);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("name", node.at("/data/attributes/name").asText());
+                result.put("email", node.at("/data/attributes/email").asText());
+                result.put("plan", node.at("/data/attributes/plan").asText());
+                return ResponseEntity.ok(result);
+            } catch (Exception e) {
+                return unavailable;
+            }
+        }, unavailable);
     }
 
     /**
      * (d) Open. Always 200 - per-backend status is data in the body, never a failed request. The 2s
-     * timeout on healthClient is what keeps this from hanging when a backend container is stopped.
+     * timeout on healthClient, plus the outer withDeadline() wrapper below, are what keep this from
+     * hanging when a backend container is stopped.
      */
     @GetMapping("/health")
     public ResponseEntity<Map<String, String>> health() {
         Map<String, String> result = new LinkedHashMap<>();
-        result.put("accounts", checkHealth(accountsServiceUrl));
-        result.put("catalog", checkHealth(catalogServiceUrl));
-        result.put("ordering", checkHealth(orderingServiceUrl));
+        result.put("accounts", withDeadline(() -> checkHealth(accountsServiceUrl), "UNREACHABLE"));
+        result.put("catalog", withDeadline(() -> checkHealth(catalogServiceUrl), "UNREACHABLE"));
+        result.put("ordering", withDeadline(() -> checkHealth(orderingServiceUrl), "UNREACHABLE"));
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Bounds a backend call to a hard 2s wall-clock deadline, independent of whatever timeout the HTTP
+     * client used inside `call` is itself configured with (healthClient's own connect/read timeouts,
+     * rawClient's lack of any). Needed because, against a real stopped Docker container - as opposed to a
+     * port nothing ever listens on, which is all the fake-server/unit tests in this project can exercise -
+     * hostname resolution for the stopped container's own service name can itself block for far longer
+     * than any configured connect/read timeout: confirmed live against this exact docker-compose stack
+     * (catalog-service stopped, ~10s instead of the configured 2s) - a well-known JDK limitation,
+     * URLConnection's connectTimeout bounds the TCP connect phase only, not the DNS resolution that
+     * precedes it. Runs `call` on a virtual thread; if the deadline passes, the caller gets `onTimeout`
+     * immediately and moves on - the abandoned call is left to finish in the background and its result is
+     * simply discarded, since plain JDK networking calls aren't cleanly interruptible mid-DNS-lookup.
+     */
+    private <T> T withDeadline(Supplier<T> call, T onTimeout) {
+        try {
+            return CompletableFuture.supplyAsync(call, boundedCallExecutor)
+                    .completeOnTimeout(onTimeout, 2, TimeUnit.SECONDS)
+                    .join();
+        } catch (RuntimeException e) {
+            return onTimeout;
+        }
     }
 
     private String checkHealth(String baseUrl) {
