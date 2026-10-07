@@ -30,8 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * proved. A hand-rolled JSON:API response isolates exactly the variable this task was told to worry
  * about, with no extra infrastructure (no Postgres, no port coordination with another process).
  *
- * Result (see task-4-report.md for the full write-up): PASSED on the first run. CrnkClient +
- * OkHttpAdapter.newInstance() works correctly with no crnk-setup-spring* module on the classpath.
+ * Result: PASSED on the first run. CrnkClient + OkHttpAdapter.newInstance() works correctly with no
+ * crnk-setup-spring* module on the classpath.
  */
 class CrnkClientSmokeTest {
 

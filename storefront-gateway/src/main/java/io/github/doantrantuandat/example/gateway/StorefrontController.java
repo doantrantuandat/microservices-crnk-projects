@@ -143,8 +143,8 @@ public class StorefrontController {
      * in line 3 doesn't leave orphan order lines behind from lines 1-2), then creates the order, then each
      * order line with its orderId set to the just-created order's real id - the only mechanism confirmed
      * live to actually persist the link for this entity's particular JPA mapping (see OrderLine.java's
-     * javadoc, and task-4-report.md's fix-round-2 section for the live curl output proving it; pushing
-     * relationship data through Order's own "lines" field at create time does NOT persist it).
+     * javadoc for the full reasoning; pushing relationship data through Order's own "lines" field at
+     * create time does NOT persist it).
      * <p>
      * Every entity in this workspace has a plain @Id with no @GeneratedValue - this gateway has no way to
      * see ordering-service's own id sequence, so it mints ids itself (see {@link #nextId()}).

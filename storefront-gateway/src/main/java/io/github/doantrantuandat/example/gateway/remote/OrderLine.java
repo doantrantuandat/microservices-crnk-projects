@@ -19,8 +19,8 @@ import lombok.Data;
  * data through Order's own create() call (its "lines" field) does NOT persist - confirmed live: POST
  * /order with lines:[...] returns 201, but every subsequent read shows an empty lines array. Setting
  * OrderLine.orderId directly when creating the OrderLine itself DOES persist (same writable scalar
- * column, an ordinary insert - see StorefrontController.createOrder and task-4-report.md's fix-round-2
- * section for the live curl output proving it). So this gateway now does navigate OrderLine -> Order (to
+ * column, an ordinary insert - see StorefrontController.createOrder, and EVALUATION.md section 2 for the
+ * live curl output proving it). So this gateway now does navigate OrderLine -> Order (to
  * create that link going forward), and the field pair belongs back here.
  */
 @Data
