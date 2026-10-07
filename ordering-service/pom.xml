@@ -42,7 +42,7 @@
   </dependencyManagement>
 
   <dependencies>
-    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></dependency>
+    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version><scope>provided</scope></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-setup-spring-boot4</artifactId></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-data-jpa-jackson3</artifactId></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-validation-jackson3</artifactId></dependency>

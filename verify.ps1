@@ -118,7 +118,9 @@ if ($seedResp.Status -eq 201 -and $seedResp.Body -match '"id":"(\d+)"') {
     $r = Invoke-Api -Url "$Ordering/order/$brokenId`?include=account"
     Assert-Status "broken accountId=99999 -> clean 404, not 500" 404 $r | Out-Null
 } else {
-    Write-Host "[SKIP] negative case: could not seed a broken order (status $($seedResp.Status))" -ForegroundColor Yellow
+    Write-Host "[FAIL] broken accountId=99999 -> clean 404, not 500 (could not seed broken order, status $($seedResp.Status))" -ForegroundColor Red
+    Write-Host "       Body: $($seedResp.Body)" -ForegroundColor Red
+    $script:FailCount++
 }
 
 Write-Host "`n=== 6. Validation failure (422) ===" -ForegroundColor Cyan
@@ -198,7 +200,12 @@ if ($createResult.Body -match '"orderId":(\d+)') {
     Assert-Status "re-fetched new order $newOrderId directly from ordering-service" 200 $refetch | Out-Null
     Assert-Contains "re-fetched order's lines relationship is populated (not empty)" '"type":"orderLine"' $refetch
 } else {
-    Write-Host "[FAIL] could not parse orderId from create-order response to re-verify linkage" -ForegroundColor Red
+    # Both checks that would have run below must still be counted - a parse failure here must not shrink
+    # the total number of pass/fail-counted checks this run reports (see the expected-total assertion at
+    # the end of this script).
+    Write-Host "[FAIL] re-fetched new order directly from ordering-service (could not parse orderId from create-order response)" -ForegroundColor Red
+    $script:FailCount++
+    Write-Host "[FAIL] re-fetched order's lines relationship is populated (not empty) (could not parse orderId from create-order response)" -ForegroundColor Red
     $script:FailCount++
 }
 
@@ -209,15 +216,14 @@ $r = Invoke-Api -Url "$Gateway/api/orders/1/summary"
 Assert-Status "summary still 200 with catalog down (product detail degrades, account is unaffected)" 200 $r | Out-Null
 $r2 = Invoke-Api -Url "$Gateway/api/health"
 Assert-Contains "health reports catalog down" '"catalog":"UNREACHABLE"' $r2
-if ($r2.Body -notmatch '"catalog":"UP"') {
-    $healthAlt = Invoke-Api -Url "$Gateway/api/health"
-    if ($healthAlt.Body -match '"catalog":"(DOWN|UNREACHABLE)"') {
-        Write-Host "[PASS] catalog correctly reported non-UP while stopped" -ForegroundColor Green
-        $script:PassCount++
-    }
-}
 docker compose start catalog-service | Out-Null
-Start-Sleep -Seconds 5
+# Measured real restart time is ~3.0-3.4s; poll catalog-service's own actuator instead of a fixed sleep so
+# a slower run never flakes (bounded by a generous 30s deadline rather than an unbounded wait).
+$deadline = (Get-Date).AddSeconds(30)
+do {
+    Start-Sleep -Seconds 1
+    $healthWait = Invoke-Api -Url "$Catalog/actuator/health"
+} until ($healthWait.Status -eq 200 -or (Get-Date) -gt $deadline)
 
 Write-Host "`n=== 13. Resilience: stop accounts-service (hard-dependency + fail-open wrapper) ===" -ForegroundColor Cyan
 docker compose stop accounts-service | Out-Null
@@ -233,7 +239,12 @@ if ($r2.Status -eq 502 -or $r2.Status -eq 200) {
     $script:FailCount++
 }
 docker compose start accounts-service | Out-Null
-Start-Sleep -Seconds 5
+# Same poll-instead-of-fixed-sleep rationale as section 12 above.
+$deadline = (Get-Date).AddSeconds(30)
+do {
+    Start-Sleep -Seconds 1
+    $healthWait = Invoke-Api -Url "$Accounts/actuator/health"
+} until ($healthWait.Status -eq 200 -or (Get-Date) -gt $deadline)
 
 Write-Host "`n=== 14. Concurrency smoke test ===" -ForegroundColor Cyan
 $jobs = 1..20 | ForEach-Object {
@@ -248,6 +259,16 @@ if (-not $bad) {
     $script:PassCount++
 } else {
     Write-Host "[FAIL] $($bad.Count) of 20 concurrent requests did not return 200: $($bad -join ',')" -ForegroundColor Red
+    $script:FailCount++
+}
+
+# Guards against a future regression of this exact class (a branch that silently skips instead of
+# counting a pass/fail) - the total must always equal this fixed number of pass/fail-emitting assertions,
+# regardless of which branches passed or failed above.
+$expectedTotalChecks = 44
+$actualTotalChecks = $script:PassCount + $script:FailCount
+if ($actualTotalChecks -ne $expectedTotalChecks) {
+    Write-Host "[FAIL] expected $expectedTotalChecks total checks, ran $actualTotalChecks" -ForegroundColor Red
     $script:FailCount++
 }
 

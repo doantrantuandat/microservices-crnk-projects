@@ -33,7 +33,7 @@
          processor under the JDK 21 toolchain (NoSuchFieldError on javac's internal JCImport AST node -
          Lombok's reflection shims for that node predate JDK 21, which didn't exist until 3 years after
          1.18.20 shipped). Pinned to the same JDK21-verified version crnk-framework's own root pom uses. -->
-    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></dependency>
+    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version><scope>provided</scope></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-setup-spring-boot2</artifactId></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-data-jpa-legacy</artifactId></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-validation-legacy</artifactId></dependency>

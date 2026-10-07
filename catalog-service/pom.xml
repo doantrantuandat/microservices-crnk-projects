@@ -33,7 +33,7 @@
          (accounts-service) empirically found Boot2.3.12's managed Lombok (1.18.20) crashes as a javac
          annotation processor under this machine's JDK21 toolchain. Pinned to the same JDK21-verified
          version crnk-framework's own root pom uses. -->
-    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version></dependency>
+    <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><version>1.18.48</version><scope>provided</scope></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-setup-spring-boot3</artifactId></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-data-jpa</artifactId></dependency>
     <dependency><groupId>io.github.doantrantuandat</groupId><artifactId>crnk-validation</artifactId></dependency>

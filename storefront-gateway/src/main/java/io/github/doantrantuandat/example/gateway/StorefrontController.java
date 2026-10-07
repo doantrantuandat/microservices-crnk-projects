@@ -105,9 +105,10 @@ public class StorefrontController {
             lines = orderingClient.getRepositoryForType(Order.class, OrderLine.class)
                     .findManyTargets(id, "lines", new QuerySpec(OrderLine.class));
         } catch (RuntimeException e) {
-            // Same backend that just answered the order itself; treat as a degraded detail rather than
-            // failing the whole response, consistent with this endpoint's partial-degradation contract.
-            lines = List.of();
+            // Same backend that just answered the order itself - a transient failure here must not look
+            // like "this order has no lines" under a confident 200. Fail loudly, same as the account-hop
+            // below, instead of silently degrading to an empty (and misleading) list.
+            return ResponseEntity.status(502).body(error("ordering-service unavailable"));
         }
 
         List<LineView> lineViews = lines.stream()
@@ -151,6 +152,17 @@ public class StorefrontController {
     @PostMapping("/orders")
     public ResponseEntity<?> createOrder(@RequestBody CreateOrderRequest request) {
         List<CreateLineRequest> requestedLines = request.lines() == null ? List.of() : request.lines();
+
+        // Client-input errors are not "ordering-service unavailable" - reject them here, before any
+        // backend call, so a correctly-rejecting backend never gets misreported as a dead one below.
+        if (request.accountId() == null) {
+            return ResponseEntity.status(400).body(error("accountId is required"));
+        }
+        for (CreateLineRequest lineReq : requestedLines) {
+            if (lineReq.qty() <= 0) {
+                return ResponseEntity.status(400).body(error("line qty must be positive"));
+            }
+        }
 
         Account account;
         try {

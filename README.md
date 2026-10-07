@@ -115,7 +115,8 @@ Mouse/19.99, SKU-002 Mechanical Keyboard/89.50, SKU-003 USB-C Hub/34.00, all `ac
 ## Further reading
 
 - [`EVALUATION.md`](./EVALUATION.md) — the 10-criterion findings writeup, backed by the real `verify.ps1`
-  run captured in this repository (39 passed / 5 failed, with the failures traced to one precise, genuine
-  finding plus one benign by-design redundant check — see that document for the full breakdown).
+  run captured in this repository (44 passed / 0 failed, reproduced across three consecutive live runs —
+  see that document for the full breakdown, including a genuine crnk-data-jpa relationship-write limitation
+  found along the way and the workaround now shipped around it).
 - [`verify.ps1`](./verify.ps1) — the end-to-end validation script itself; run it against the live stack to
   reproduce every result cited in `EVALUATION.md`.
